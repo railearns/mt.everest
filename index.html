@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Everest Climbing Challenge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d);
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 50%, #FFFFFF 100%);
+            border: 4px solid #333;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        #gameOver h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #fdbb2d;
+        }
+
+        #gameOver button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        #gameOver button:hover {
+            background: #45a049;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="ui">
+        <div>🏔️ Mt. Everest Challenge</div>
+        <div>Altitude: <span id="altitude">0</span>m / 8849m</div>
+        <div>❤️ Oxygen: <span id="oxygen">100</span>%</div>
+        <div>⭐ Score: <span id="score">0</span></div>
+    </div>
+
+    <div id="instructions">
+        ⬅️ ➡️ Move | SPACE Jump | Avoid obstacles & collect oxygen!
+    </div>
+
+    <div id="gameOver">
+        <h1 id="gameOverTitle">Game Over!</h1>
+        <p id="finalStats"></p>
+        <button onclick="restartGame()">Try Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = {
+            player: {
+                x: 100,
+                y: 450,
+                width: 30,
+                height: 40,
+                velocityY: 0,
+                isJumping: false,
+                color: '#FF4444'
+            },
+            altitude: 0,
+            oxygen: 100,
+            score: 0,
+            gameSpeed: 3,
+            obstacles: [],
+            oxygenTanks: [],
+            clouds: [],
+            gameRunning: true,
+            keys: {}
+        };
+
+        // Initialize clouds
+        for (let i = 0; i < 5; i++) {
+            gameState.clouds.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * 200,
+                width: 60 + Math.random() * 40,
+                speed: 0.5 + Math.random()
+            });
+        }
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            gameState.keys[e.key] = true;
+            if (e.key === ' ' && !gameState.player.isJumping) {
+                gameState.player.velocityY = -12;
+                gameState.player.isJumping = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            gameState.keys[e.key] = false;
+        });
+
+        function drawPlayer() {
+            const p = gameState.player;
+            
+            // Body
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            
+            // Head
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(p.x + p.width/2, p.y - 10, 12, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Backpack
+            ctx.fillStyle = '#00AA00';
+            ctx.fillRect(p.x + p.width - 8, p.y + 5, 6, 20);
+        }
+
+        function drawMountain() {
+            // Mountain slope
+            ctx.fillStyle = '#8B7355';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            ctx.lineTo(0, 500);
+            ctx.lineTo(canvas.width, 300);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+            
+            // Snow on mountain
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(0, 500);
+            ctx.lineTo(canvas.width, 300);
+            ctx.lineTo(canvas.width, 320);
+            ctx.lineTo(0, 520);
+            ctx.fill();
+        }
+
+        function drawClouds() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            gameState.clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 25, cloud.y, 25, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 50, cloud.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+                
+                cloud.x -= cloud.speed;
+                if (cloud.x < -100) {
+                    cloud.x = canvas.width + 50;
+                    cloud.y = Math.random() * 200;
+                }
+            });
+        }
+
+        function spawnObstacle() {
+            if (Math.random() < 0.02) {
+                gameState.obstacles.push({
+                    x: canvas.width,
+                    y: 460,
+                    width: 30,
+                    height: 40,
+                    type: 'rock'
+                });
+            }
+        }
+
+        function spawnOxygenTank() {
+            if (Math.random() < 0.01) {
+                gameState.oxygenTanks.push({
+                    x: canvas.width,
+                    y: 300 + Math.random() * 150,
+                    width: 25,
+                    height: 30
+                });
+            }
+        }
+
+        function drawObstacles() {
+            gameState.obstacles.forEach((obs, index) => {
+                // Rock obstacle
+                ctx.fillStyle = '#555555';
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.fillStyle = '#777777';
+                ctx.fillRect(obs.x + 5, obs.y + 5, 10, 10);
+                
+                obs.x -= gameState.gameSpeed;
+                
+                if (obs.x < -obs.width) {
+                    gameState.obstacles.splice(index, 1);
+                }
+                
+                // Collision detection
+                if (checkCollision(gameState.player, obs)) {
+                    endGame(false);
+                }
+            });
+        }
+
+        function drawOxygenTanks() {
+            gameState.oxygenTanks.forEach((tank, index) => {
+                // Oxygen tank
+                ctx.fillStyle = '#00BFFF';
+                ctx.fillRect(tank.x, tank.y, tank.width, tank.height);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = '20px Arial';
+                ctx.fillText('O₂', tank.x + 3, tank.y + 20);
+                
+                tank.x -= gameState.gameSpeed;
+                
+                if (tank.x < -tank.width) {
+                    gameState.oxygenTanks.splice(index, 1);
+                }
+                
+                // Collection detection
+                if (checkCollision(gameState.player, tank)) {
+                    gameState.oxygen = Math.min(100, gameState.oxygen + 30);
+                    gameState.score += 50;
+                    gameState.oxygenTanks.splice(index, 1);
+                }
+            });
+        }
+
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        function updatePlayer() {
+            const p = gameState.player;
+            
+            // Horizontal movement
+            if (gameState.keys['ArrowLeft'] && p.x > 0) {
+                p.x -= 5;
+            }
+            if (gameState.keys['ArrowRight'] && p.x < canvas.width - p.width) {
+                p.x += 5;
+            }
+            
+            // Gravity
+            p.velocityY += 0.6;
+            p.y += p.velocityY;
+            
+            // Ground collision
+            if (p.y >= 450) {
+                p.y = 450;
+                p.velocityY = 0;
+                p.isJumping = false;
+            }
+        }
+
+        function updateGame() {
+            gameState.altitude += 0.5;
+            gameState.oxygen -= 0.05;
+            gameState.score += 1;
+            
+            if (gameState.altitude % 500 < 1) {
+                gameState.gameSpeed += 0.2;
+            }
+            
+            if (gameState.oxygen <= 0) {
+                endGame(false);
+            }
+            
+            if (gameState.altitude >= 8849) {
+                endGame(true);
+            }
+            
+            document.getElementById('altitude').textContent = Math.floor(gameState.altitude);
+            document.getElementById('oxygen').textContent = Math.floor(gameState.oxygen);
+            document.getElementById('score').textContent = Math.floor(gameState.score);
+        }
+
+        function endGame(won) {
+            gameState.gameRunning = false;
+            const gameOverDiv = document.getElementById('gameOver');
+            const title = document.getElementById('gameOverTitle');
+            const stats = document.getElementById('finalStats');
+            
+            if (won) {
+                title.textContent = '🏆 Summit Reached! 🏆';
+                title.style.color = '#FFD700';
+                stats.innerHTML = `You conquered Mt. Everest!<br>
+                                  Final Altitude: ${Math.floor(gameState.altitude)}m<br>
+                                  Score: ${Math.floor(gameState.score)}`;
+            } else {
+                title.textContent = '💔 Mission Failed';
+                title.style.color = '#FF4444';
+                stats.innerHTML = `Altitude Reached: ${Math.floor(gameState.altitude)}m<br>
+                                  Score: ${Math.floor(gameState.score)}<br>
+                                  Better luck next time!`;
+            }
+            
+            gameOverDiv.style.display = 'block';
+        }
+
+        function restartGame() {
+            gameState = {
+                player: {
+                    x: 100,
+                    y: 450,
+                    width: 30,
+                    height: 40,
+                    velocityY: 0,
+                    isJumping: false,
+                    color: '#FF4444'
+                },
+                altitude: 0,
+                oxygen: 100,
+                score: 0,
+                gameSpeed: 3,
+                obstacles: [],
+                oxygenTanks: [],
+                clouds: gameState.clouds,
+                gameRunning: true,
+                keys: {}
+            };
+            
+            document.getElementById('gameOver').style.display = 'none';
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (!gameState.gameRunning) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawClouds();
+            drawMountain();
+            spawnObstacle();
+            spawnOxygenTank();
+            drawObstacles();
+            drawOxygenTanks();
+            updatePlayer();
+            drawPlayer();
+            updateGame();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
